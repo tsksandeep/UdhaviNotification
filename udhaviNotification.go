@@ -114,10 +114,9 @@ func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 
 	pushMessage := &expo.PushMessage{
 		To:       expoTokens,
-		Body:     "This is a test notification",
-		Data:     map[string]string{"withSome": "data"},
+		Body:     chatMessage.Body.Value,
 		Sound:    "default",
-		Title:    "Notification Title",
+		Title:    "New Chat Message from " + chatMessage.UserName.Value,
 		Priority: expo.DefaultPriority,
 	}
 
