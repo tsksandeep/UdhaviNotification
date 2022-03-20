@@ -8,5 +8,5 @@ require (
 	firebase.google.com/go v3.13.0+incompatible
 	github.com/oliveroneill/exponent-server-sdk-golang v0.0.0-20210823140141-d050598be512
 	github.com/sirupsen/logrus v1.8.1
-	google.golang.org/api v0.73.0
+	google.golang.org/api v0.73.0 // indirect
 )

@@ -21,15 +21,11 @@ type FirestoreValue struct {
 	UpdateTime time.Time   `json:"updateTime"`
 }
 
-type ChatValueString struct {
-	Value string `json:"stringValue"`
-}
-
 type ChatMessage struct {
-	UserID      ChatValueString `json:"userId"`
-	UserName    ChatValueString `json:"username"`
-	Body        ChatValueString `json:"body"`
-	ChatGroupID ChatValueString `json:"chatGroupId"`
+	UserID      string `json:"userId"`
+	UserName    string `json:"userName"`
+	Body        string `json:"body"`
+	ChatGroupID string `json:"chatGroupId"`
 }
 
 type UserData struct {

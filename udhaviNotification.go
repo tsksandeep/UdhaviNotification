@@ -2,27 +2,22 @@ package udhaviNotification
 
 import (
 	"context"
-	"encoding/base64"
 	"errors"
-	"os"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
 	expo "github.com/oliveroneill/exponent-server-sdk-golang/sdk"
 	log "github.com/sirupsen/logrus"
-	"google.golang.org/api/option"
 )
 
 const (
-	usersCollection = "users"
+	chatGroupCollection = "chatGroup"
 )
 
 var (
 	expoClient      *expo.PushClient
 	firestoreClient *firestore.Client
 	firebaseConfig  *firebase.Config
-
-	firebaseAuthKey = os.Getenv("FIREBASE_AUTH_KEY")
 )
 
 func init() {
@@ -32,20 +27,13 @@ func init() {
 	log.SetLevel(log.InfoLevel)
 
 	firebaseConfig = &firebase.Config{
-		DatabaseURL: "https://<CHANGE_ME>.firebaseio.com/",
+		ProjectID:   "udhavi-dev",
+		DatabaseURL: "https://udhavi-dev.firebaseio.com",
 	}
 
 	ctx := context.Background()
 
-	decodedKey, err := getDecodedFireBaseKey()
-	if err != nil {
-		log.Errorf("decode firebase key: %s", err)
-		return
-	}
-
-	opts := []option.ClientOption{option.WithCredentialsJSON(decodedKey)}
-
-	firebaseApp, err := firebase.NewApp(ctx, firebaseConfig, opts...)
+	firebaseApp, err := firebase.NewApp(ctx, firebaseConfig)
 	if err != nil {
 		log.Errorf("initializing firebase app: %s", err)
 		return
@@ -60,19 +48,10 @@ func init() {
 	expoClient = expo.NewPushClient(nil)
 }
 
-func getDecodedFireBaseKey() ([]byte, error) {
-	decodedKey, err := base64.StdEncoding.DecodeString(firebaseAuthKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return decodedKey, nil
-}
-
 func getExpoTokenFromSenderIds(ctx context.Context, userId, chatGroupId string) []expo.ExponentPushToken {
 	expoTokens := []expo.ExponentPushToken{}
 
-	docSnap, err := firestoreClient.Collection(usersCollection).Doc(chatGroupId).Get(ctx)
+	docSnap, err := firestoreClient.Collection(chatGroupCollection).Doc(chatGroupId).Get(ctx)
 	if err != nil {
 		log.Errorf("unable to fetch chat group data for %s", chatGroupId)
 		return expoTokens
@@ -105,7 +84,7 @@ func getExpoTokenFromSenderIds(ctx context.Context, userId, chatGroupId string) 
 func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 	chatMessage := fsEvent.Value.Fields
 
-	expoTokens := getExpoTokenFromSenderIds(context.Background(), chatMessage.UserID.Value, chatMessage.ChatGroupID.Value)
+	expoTokens := getExpoTokenFromSenderIds(context.Background(), chatMessage.UserID, chatMessage.ChatGroupID)
 	if len(expoTokens) == 0 {
 		errMsg := "no expo tokens to send notification"
 		log.Error(errMsg)
@@ -114,9 +93,9 @@ func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 
 	pushMessage := &expo.PushMessage{
 		To:       expoTokens,
-		Body:     chatMessage.Body.Value,
+		Body:     chatMessage.Body,
 		Sound:    "default",
-		Title:    "New Chat Message from " + chatMessage.UserName.Value,
+		Title:    "New Message from " + chatMessage.UserName,
 		Priority: expo.DefaultPriority,
 	}
 
@@ -128,9 +107,8 @@ func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 
 	if response.ValidateResponse() != nil {
 		log.Error(response.PushMessage.To, "failed")
+		return nil
 	}
-
-	log.Infof("successfully pushed notifications...")
 
 	return nil
 }
