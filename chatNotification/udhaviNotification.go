@@ -1,4 +1,4 @@
-package udhaviNotification
+package chatNotification
 
 import (
 	"context"
