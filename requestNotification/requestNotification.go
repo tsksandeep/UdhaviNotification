@@ -3,6 +3,7 @@ package requestNotification
 import (
 	"context"
 	"path/filepath"
+	"sync"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
@@ -67,10 +68,14 @@ func getUserData(ctx context.Context, id string) *UserData {
 func assignedVolunteerNotification(ctx context.Context, request Request) []ExpoNotification {
 	expoNotifications := []ExpoNotification{}
 
+	requestorData := getUserData(ctx, request.RequestorID)
+	if requestorData == nil {
+		return expoNotifications
+	}
+
 	for _, volunteerId := range request.AssignedVolunteerIds {
 		volunteerData := getUserData(ctx, volunteerId)
-		requestorData := getUserData(ctx, request.RequestorID)
-		if volunteerData == nil || requestorData == nil {
+		if volunteerData == nil {
 			continue
 		}
 
@@ -90,27 +95,42 @@ func assignedVolunteerNotification(ctx context.Context, request Request) []ExpoN
 	return expoNotifications
 }
 
-func pushExpoNotifications(expoNotifications []ExpoNotification) {
-	for _, expoNotification := range expoNotifications {
-		pushMessage := &expo.PushMessage{
-			To:       expoNotification.ExpoTokens,
-			Body:     expoNotification.Body,
-			Sound:    "default",
-			Title:    expoNotification.Title,
-			Priority: expo.DefaultPriority,
-		}
+func pushExpoNotificationGoRoutine(waitGroup *sync.WaitGroup, expoNotification ExpoNotification) {
+	defer waitGroup.Done()
 
-		response, err := expoClient.Publish(pushMessage)
-		if err != nil {
-			log.Error(err)
-			continue
-		}
-
-		if response.ValidateResponse() != nil {
-			log.Error(response.PushMessage.To, "failed")
-			continue
-		}
+	pushMessage := &expo.PushMessage{
+		To:       expoNotification.ExpoTokens,
+		Body:     expoNotification.Body,
+		Sound:    "default",
+		Title:    expoNotification.Title,
+		Priority: expo.DefaultPriority,
 	}
+
+	response, err := expoClient.Publish(pushMessage)
+	if err != nil {
+		log.Error(err)
+		return
+	}
+
+	if response.ValidateResponse() != nil {
+		log.Error(response.PushMessage.To, "failed")
+	}
+}
+
+func pushExpoNotifications(expoNotifications []ExpoNotification) {
+	if len(expoNotifications) == 0 {
+		log.Error("no expo notifications to send")
+		return
+	}
+
+	waitGroup := new(sync.WaitGroup)
+	waitGroup.Add(len(expoNotifications))
+
+	for _, expoNotification := range expoNotifications {
+		go pushExpoNotificationGoRoutine(waitGroup, expoNotification)
+	}
+
+	waitGroup.Wait()
 }
 
 func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
