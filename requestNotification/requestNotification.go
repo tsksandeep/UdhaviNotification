@@ -2,6 +2,7 @@ package requestNotification
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sync"
 
@@ -49,6 +50,15 @@ func init() {
 	expoClient = expo.NewPushClient(nil)
 }
 
+func isItemPresentInList(list []string, item string) bool {
+	for _, listItem := range list {
+		if listItem == item {
+			return true
+		}
+	}
+	return false
+}
+
 func getUserData(ctx context.Context, id string) *UserData {
 	docSnap, err := firestoreClient.Collection(userCollection).Doc(id).Get(ctx)
 	if err != nil {
@@ -65,13 +75,52 @@ func getUserData(ctx context.Context, id string) *UserData {
 	return &userData
 }
 
-func assignedVolunteerNotification(ctx context.Context, request Request) []ExpoNotification {
+func assignedVolunteerNotification(ctx context.Context, request, oldRequest Request) []ExpoNotification {
 	expoNotifications := []ExpoNotification{}
 
 	requestorData := getUserData(ctx, request.RequestorID)
 	if requestorData == nil {
 		return expoNotifications
 	}
+
+	token, err := expo.NewExponentPushToken(requestorData.ExpoToken)
+	if err != nil {
+		log.Errorf("invalid expo token. user id: %s", request.RequestorID)
+		return expoNotifications
+	}
+
+	volunteerIds := []string{}
+	for _, volunteerId := range request.AssignedVolunteerIds {
+		if !isItemPresentInList(oldRequest.AssignedVolunteerIds, volunteerId) {
+			volunteerIds = append(volunteerIds, volunteerId)
+		}
+	}
+
+	for _, volunteerId := range volunteerIds {
+		volunteerData := getUserData(ctx, volunteerId)
+		if volunteerData == nil {
+			continue
+		}
+
+		expoNotifications = append(expoNotifications, ExpoNotification{
+			Title:      fmt.Sprintf("Update for Request - %s", request.ID),
+			Body:       fmt.Sprintf("%s (%s) has been assigned for your request", volunteerData.Name, volunteerData.PhoneNumber),
+			ExpoTokens: []expo.ExponentPushToken{token},
+		})
+	}
+
+	return expoNotifications
+}
+
+func updateNotesNotification(ctx context.Context, request Request) []ExpoNotification {
+	expoNotifications := []ExpoNotification{}
+
+	requestorData := getUserData(ctx, request.RequestorID)
+	if requestorData == nil {
+		return expoNotifications
+	}
+
+	expoPushTokenList := []expo.ExponentPushToken{}
 
 	for _, volunteerId := range request.AssignedVolunteerIds {
 		volunteerData := getUserData(ctx, volunteerId)
@@ -85,12 +134,14 @@ func assignedVolunteerNotification(ctx context.Context, request Request) []ExpoN
 			continue
 		}
 
-		expoNotifications = append(expoNotifications, ExpoNotification{
-			Title:      "Update for Request - " + request.ID,
-			Body:       volunteerData.Name + " has been assigned for your request",
-			ExpoTokens: []expo.ExponentPushToken{token},
-		})
+		expoPushTokenList = append(expoPushTokenList, token)
 	}
+
+	expoNotifications = append(expoNotifications, ExpoNotification{
+		Title:      fmt.Sprintf("Update for Request - %s", request.ID),
+		Body:       fmt.Sprintf("%s has updated the request notes", requestorData.Name),
+		ExpoTokens: expoPushTokenList,
+	})
 
 	return expoNotifications
 }
@@ -135,18 +186,22 @@ func pushExpoNotifications(expoNotifications []ExpoNotification) {
 
 func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 	request := fsEvent.Value.Fields
+	oldRequest := fsEvent.OldValue.Fields
 	updatedFieldPaths := fsEvent.UpdateMask.FieldPaths
+
+	var expoNotifications []ExpoNotification
 
 	for _, updatedFieldPath := range updatedFieldPaths {
 		field := filepath.Base(updatedFieldPath)
-
 		switch field {
-		// TODO: handle more cases
 		case "assignedVolunteerIds":
-			expoNotifications := assignedVolunteerNotification(ctx, request)
-			pushExpoNotifications(expoNotifications)
+			expoNotifications = assignedVolunteerNotification(ctx, request, oldRequest)
+		case "notes":
+			expoNotifications = updateNotesNotification(ctx, request)
 		}
 	}
+
+	pushExpoNotifications(expoNotifications)
 
 	return nil
 }

@@ -51,6 +51,7 @@ type Request struct {
 }
 
 type UserData struct {
-	Name      string `json:"name"`
-	ExpoToken string `json:"expoToken"`
+	Name        string `json:"name"`
+	ExpoToken   string `json:"expoToken"`
+	PhoneNumber string `json:"phoneNumber"`
 }
