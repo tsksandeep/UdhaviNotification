@@ -2,6 +2,7 @@ package chatNotification
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 const (
 	chatGroupCollection    = "chatGroup"
 	notificationCollection = "notifications"
+
+	alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 )
 
 var (
@@ -50,6 +53,19 @@ func init() {
 	expoClient = expo.NewPushClient(nil)
 }
 
+func getDocId() string {
+	b := make([]byte, 20)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+
+	for i, byt := range b {
+		b[i] = alphanum[int(byt)%len(alphanum)]
+	}
+
+	return string(b)
+}
+
 func getExpoTokenFromSenderIds(ctx context.Context, chatMessage ChatMessage) []expo.ExponentPushToken {
 	expoTokens := []expo.ExponentPushToken{}
 
@@ -77,7 +93,14 @@ func getExpoTokenFromSenderIds(ctx context.Context, chatMessage ChatMessage) []e
 			continue
 		}
 
-		firestoreClient.Collection(notificationCollection).Doc(user.UserID).Collection("list").NewDoc().Create(ctx, Notification{
+		docId := getDocId()
+		if docId == "" {
+			log.Errorf("unable to generate doc id...")
+			continue
+		}
+
+		firestoreClient.Collection(notificationCollection).Doc(user.UserID).Collection("list").Doc(docId).Create(ctx, Notification{
+			ID:        docId,
 			Body:      chatMessage.Body,
 			Title:     "New Message from " + chatMessage.UserName,
 			Category:  "chat",

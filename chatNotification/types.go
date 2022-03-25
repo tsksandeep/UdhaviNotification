@@ -38,6 +38,7 @@ type ChatGroup struct {
 }
 
 type Notification struct {
+	ID        string    `json:"id"`
 	Body      string    `json:"body"`
 	Title     string    `json:"title"`
 	Category  string    `json:"category"`

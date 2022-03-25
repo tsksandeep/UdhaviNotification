@@ -2,6 +2,7 @@ package requestNotification
 
 import (
 	"context"
+	"crypto/rand"
 	"fmt"
 	"path/filepath"
 	"sync"
@@ -16,6 +17,8 @@ import (
 const (
 	userCollection         = "users"
 	notificationCollection = "notifications"
+
+	alphanum = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
 )
 
 var (
@@ -50,6 +53,19 @@ func init() {
 	}
 
 	expoClient = expo.NewPushClient(nil)
+}
+
+func getDocId() string {
+	b := make([]byte, 20)
+	if _, err := rand.Read(b); err != nil {
+		return ""
+	}
+
+	for i, byt := range b {
+		b[i] = alphanum[int(byt)%len(alphanum)]
+	}
+
+	return string(b)
 }
 
 func isItemPresentInList(list []string, item string) bool {
@@ -104,10 +120,17 @@ func assignedVolunteerNotification(ctx context.Context, request, oldRequest Requ
 			continue
 		}
 
+		docId := getDocId()
+		if docId == "" {
+			log.Errorf("unable to generate doc id...")
+			continue
+		}
+
 		title := fmt.Sprintf("Update for Request - %s", request.ID)
 		body := fmt.Sprintf("%s (%s) has been assigned for your request", volunteerData.Name, volunteerData.PhoneNumber)
 
-		firestoreClient.Collection(notificationCollection).Doc(request.RequestorID).Collection("list").NewDoc().Create(ctx, Notification{
+		firestoreClient.Collection(notificationCollection).Doc(request.RequestorID).Collection("list").Doc(docId).Create(ctx, Notification{
+			ID:        docId,
 			Body:      body,
 			Title:     title,
 			Category:  "request",
@@ -138,10 +161,17 @@ func updateStatusNotification(ctx context.Context, request Request) []ExpoNotifi
 		return expoNotifications
 	}
 
+	docId := getDocId()
+	if docId == "" {
+		log.Errorf("unable to generate doc id...")
+		return expoNotifications
+	}
+
 	title := fmt.Sprintf("Update for Request - %s", request.ID)
 	body := fmt.Sprintf("Request status has been changed to %s", request.Status)
 
-	firestoreClient.Collection(notificationCollection).Doc(request.RequestorID).Collection("list").NewDoc().Create(ctx, Notification{
+	firestoreClient.Collection(notificationCollection).Doc(request.RequestorID).Collection("list").Doc(docId).Create(ctx, Notification{
+		ID:        docId,
 		Body:      body,
 		Title:     title,
 		Category:  "request",
@@ -182,7 +212,14 @@ func updateNotesNotification(ctx context.Context, request Request) []ExpoNotific
 			continue
 		}
 
-		firestoreClient.Collection(notificationCollection).Doc(volunteerId).Collection("list").NewDoc().Create(ctx, Notification{
+		docId := getDocId()
+		if docId == "" {
+			log.Errorf("unable to generate doc id...")
+			continue
+		}
+
+		firestoreClient.Collection(notificationCollection).Doc(volunteerId).Collection("list").Doc(docId).Create(ctx, Notification{
+			ID:        docId,
 			Body:      body,
 			Title:     title,
 			Category:  "request",
