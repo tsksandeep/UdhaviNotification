@@ -55,3 +55,10 @@ type UserData struct {
 	ExpoToken   string `json:"expoToken"`
 	PhoneNumber string `json:"phoneNumber"`
 }
+
+type Notification struct {
+	Body      string    `json:"body"`
+	Title     string    `json:"title"`
+	Category  string    `json:"category"`
+	Timestamp time.Time `json:"timestamp"`
+}

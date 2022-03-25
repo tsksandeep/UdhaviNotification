@@ -36,3 +36,10 @@ type UserData struct {
 type ChatGroup struct {
 	UserList []UserData `json:"userList"`
 }
+
+type Notification struct {
+	Body      string    `json:"body"`
+	Title     string    `json:"title"`
+	Category  string    `json:"category"`
+	Timestamp time.Time `json:"timestamp"`
+}

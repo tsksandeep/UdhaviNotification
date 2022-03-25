@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
@@ -13,7 +14,8 @@ import (
 )
 
 const (
-	userCollection = "users"
+	userCollection         = "users"
+	notificationCollection = "notifications"
 )
 
 var (
@@ -102,9 +104,19 @@ func assignedVolunteerNotification(ctx context.Context, request, oldRequest Requ
 			continue
 		}
 
+		title := fmt.Sprintf("Update for Request - %s", request.ID)
+		body := fmt.Sprintf("%s (%s) has been assigned for your request", volunteerData.Name, volunteerData.PhoneNumber)
+
+		firestoreClient.Collection(notificationCollection).Doc(request.RequestorID).Collection("list").NewDoc().Create(ctx, Notification{
+			Body:      body,
+			Title:     title,
+			Category:  "request",
+			Timestamp: time.Now(),
+		})
+
 		expoNotifications = append(expoNotifications, ExpoNotification{
-			Title:      fmt.Sprintf("Update for Request - %s", request.ID),
-			Body:       fmt.Sprintf("%s (%s) has been assigned for your request", volunteerData.Name, volunteerData.PhoneNumber),
+			Title:      title,
+			Body:       body,
 			ExpoTokens: []expo.ExponentPushToken{token},
 		})
 	}
@@ -126,9 +138,19 @@ func updateStatusNotification(ctx context.Context, request Request) []ExpoNotifi
 		return expoNotifications
 	}
 
+	title := fmt.Sprintf("Update for Request - %s", request.ID)
+	body := fmt.Sprintf("Request status has been changed to %s", request.Status)
+
+	firestoreClient.Collection(notificationCollection).Doc(request.RequestorID).Collection("list").NewDoc().Create(ctx, Notification{
+		Body:      body,
+		Title:     title,
+		Category:  "request",
+		Timestamp: time.Now(),
+	})
+
 	expoNotifications = append(expoNotifications, ExpoNotification{
-		Title:      fmt.Sprintf("Update for Request - %s", request.ID),
-		Body:       fmt.Sprintf("Request status has been changed to %s", request.Status),
+		Title:      title,
+		Body:       body,
 		ExpoTokens: []expo.ExponentPushToken{token},
 	})
 
@@ -145,6 +167,9 @@ func updateNotesNotification(ctx context.Context, request Request) []ExpoNotific
 
 	expoPushTokenList := []expo.ExponentPushToken{}
 
+	title := fmt.Sprintf("Update for Request - %s", request.ID)
+	body := fmt.Sprintf("Request status has been changed to %s", request.Status)
+
 	for _, volunteerId := range request.AssignedVolunteerIds {
 		volunteerData := getUserData(ctx, volunteerId)
 		if volunteerData == nil {
@@ -157,12 +182,19 @@ func updateNotesNotification(ctx context.Context, request Request) []ExpoNotific
 			continue
 		}
 
+		firestoreClient.Collection(notificationCollection).Doc(volunteerId).Collection("list").NewDoc().Create(ctx, Notification{
+			Body:      body,
+			Title:     title,
+			Category:  "request",
+			Timestamp: time.Now(),
+		})
+
 		expoPushTokenList = append(expoPushTokenList, token)
 	}
 
 	expoNotifications = append(expoNotifications, ExpoNotification{
-		Title:      fmt.Sprintf("Update for Request - %s", request.ID),
-		Body:       fmt.Sprintf("%s has updated the request notes", requestorData.Name),
+		Title:      title,
+		Body:       body,
 		ExpoTokens: expoPushTokenList,
 	})
 

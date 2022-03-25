@@ -3,6 +3,7 @@ package chatNotification
 import (
 	"context"
 	"errors"
+	"time"
 
 	"cloud.google.com/go/firestore"
 	firebase "firebase.google.com/go"
@@ -11,7 +12,8 @@ import (
 )
 
 const (
-	chatGroupCollection = "chatGroup"
+	chatGroupCollection    = "chatGroup"
+	notificationCollection = "notifications"
 )
 
 var (
@@ -48,12 +50,12 @@ func init() {
 	expoClient = expo.NewPushClient(nil)
 }
 
-func getExpoTokenFromSenderIds(ctx context.Context, userId, chatGroupId string) []expo.ExponentPushToken {
+func getExpoTokenFromSenderIds(ctx context.Context, chatMessage ChatMessage) []expo.ExponentPushToken {
 	expoTokens := []expo.ExponentPushToken{}
 
-	docSnap, err := firestoreClient.Collection(chatGroupCollection).Doc(chatGroupId).Get(ctx)
+	docSnap, err := firestoreClient.Collection(chatGroupCollection).Doc(chatMessage.ChatGroupID).Get(ctx)
 	if err != nil {
-		log.Errorf("unable to fetch chat group data for %s", chatGroupId)
+		log.Errorf("unable to fetch chat group data for %s", chatMessage.ChatGroupID)
 		return expoTokens
 	}
 
@@ -65,7 +67,7 @@ func getExpoTokenFromSenderIds(ctx context.Context, userId, chatGroupId string) 
 
 	for _, user := range chatGroup.UserList {
 		// Because we should not send notification to the same user
-		if user.UserID == userId {
+		if user.UserID == chatMessage.UserID {
 			continue
 		}
 
@@ -74,6 +76,13 @@ func getExpoTokenFromSenderIds(ctx context.Context, userId, chatGroupId string) 
 			log.Errorf("invalid expo token. user id: %s", user.UserID)
 			continue
 		}
+
+		firestoreClient.Collection(notificationCollection).Doc(user.UserID).Collection("list").NewDoc().Create(ctx, Notification{
+			Body:      chatMessage.Body,
+			Title:     "New Message from " + chatMessage.UserName,
+			Category:  "chat",
+			Timestamp: time.Now(),
+		})
 
 		expoTokens = append(expoTokens, token)
 	}
@@ -84,7 +93,7 @@ func getExpoTokenFromSenderIds(ctx context.Context, userId, chatGroupId string) 
 func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 	chatMessage := fsEvent.Value.Fields
 
-	expoTokens := getExpoTokenFromSenderIds(context.Background(), chatMessage.UserID, chatMessage.ChatGroupID)
+	expoTokens := getExpoTokenFromSenderIds(context.Background(), chatMessage)
 	if len(expoTokens) == 0 {
 		errMsg := "no expo tokens to send notification"
 		log.Error(errMsg)
