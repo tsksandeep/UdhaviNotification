@@ -178,6 +178,9 @@ func pushExpoNotificationGoRoutine(waitGroup *sync.WaitGroup, expoNotification E
 		Sound:    "default",
 		Title:    expoNotification.Title,
 		Priority: expo.DefaultPriority,
+		Data: map[string]string{
+			"category": "request",
+		},
 	}
 
 	response, err := expoClient.Publish(pushMessage)
