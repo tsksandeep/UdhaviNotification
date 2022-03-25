@@ -112,6 +112,29 @@ func assignedVolunteerNotification(ctx context.Context, request, oldRequest Requ
 	return expoNotifications
 }
 
+func updateStatusNotification(ctx context.Context, request Request) []ExpoNotification {
+	expoNotifications := []ExpoNotification{}
+
+	requestorData := getUserData(ctx, request.RequestorID)
+	if requestorData == nil {
+		return expoNotifications
+	}
+
+	token, err := expo.NewExponentPushToken(requestorData.ExpoToken)
+	if err != nil {
+		log.Errorf("invalid expo token. user id: %s", request.RequestorID)
+		return expoNotifications
+	}
+
+	expoNotifications = append(expoNotifications, ExpoNotification{
+		Title:      fmt.Sprintf("Update for Request - %s", request.ID),
+		Body:       fmt.Sprintf("Request status has been changed to %s", request.Status),
+		ExpoTokens: []expo.ExponentPushToken{token},
+	})
+
+	return expoNotifications
+}
+
 func updateNotesNotification(ctx context.Context, request Request) []ExpoNotification {
 	expoNotifications := []ExpoNotification{}
 
@@ -196,6 +219,8 @@ func PushNotification(ctx context.Context, fsEvent FirestoreEvent) error {
 		switch field {
 		case "assignedVolunteerIds":
 			expoNotifications = assignedVolunteerNotification(ctx, request, oldRequest)
+		case "status":
+			expoNotifications = updateStatusNotification(ctx, request)
 		case "notes":
 			expoNotifications = updateNotesNotification(ctx, request)
 		}
